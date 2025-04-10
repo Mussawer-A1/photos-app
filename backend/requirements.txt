@@ -1,0 +1,7 @@
+flask
+flask-cors
+pymongo
+azure-storage-blob
+gunicorn
+python-dotenv
+

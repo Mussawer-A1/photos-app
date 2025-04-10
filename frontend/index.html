@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Photo Sharing App</title>
+  <style>
+    img { width: 300px; margin: 10px; }
+    textarea, input { width: 300px; margin: 5px 0; display: block; }
+  </style>
+</head>
+<body>
+  <h1>📸 Photo Sharing App</h1>
+  <div id="photos"></div>
+
+  <div id="interaction" style="margin-top: 30px;">
+    <h3 id="selectedTitle"></h3>
+    <textarea id="commentBox" placeholder="Write a comment..."></textarea>
+    <input id="ratingBox" type="number" min="1" max="5" placeholder="Rating 1-5"/>
+    <button onclick="submitComment()">Submit Comment</button>
+    <button onclick="submitRating()">Submit Rating</button>
+  </div>
+
+  <script>
+    let selectedTitle = "";
+    const backend = "https://<YOUR-BACKEND>.azurewebsites.net";
+
+    function loadPhotos() {
+      fetch(`${backend}/photos`)
+        .then(res => res.json())
+        .then(data => {
+          const container = document.getElementById("photos");
+          data.forEach(photo => {
+            const div = document.createElement("div");
+            div.innerHTML = `
+              <img src="${photo.blob_url}" alt="${photo.title}"/>
+              <p><b>${photo.title}</b> - ${photo.caption} (${photo.location})</p>
+              <button onclick="selectPhoto('${photo.title}')">Comment/Rate</button>
+            `;
+            container.appendChild(div);
+          });
+        });
+    }
+
+    function selectPhoto(title) {
+      selectedTitle = title;
+      document.getElementById("selectedTitle").innerText = `Commenting/Rating on: ${title}`;
+    }
+
+    function submitComment() {
+      const comment = document.getElementById("commentBox").value;
+      fetch(`${backend}/photos/${selectedTitle}/comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: "ConsumerUser", comment })
+      });
+    }
+
+    function submitRating() {
+      const rating = document.getElementById("ratingBox").value;
+      fetch(`${backend}/photos/${selectedTitle}/rate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: "ConsumerUser", rating: parseInt(rating) })
+      });
+    }
+
+    window.onload = loadPhotos;
+  </script>
+</body>
+</html>
