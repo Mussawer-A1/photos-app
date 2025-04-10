@@ -7,197 +7,161 @@
   <style>
     img { width: 300px; margin: 10px; }
     textarea, input { width: 300px; margin: 5px 0; display: block; }
-    #uploadSection { display: none; }
   </style>
 </head>
 <body>
   <h1>📸 Photo Sharing App</h1>
 
+  <!-- Sign-Up Section -->
+  <div id="signUpSection" style="display:block;">
+    <h3>Sign Up</h3>
+    <input type="text" id="signUpUsername" placeholder="Username"/>
+    <input type="password" id="signUpPassword" placeholder="Password"/>
+    <select id="userRole">
+      <option value="consumer">Consumer</option>
+      <option value="creator">Creator</option>
+    </select>
+    <button onclick="signUp()">Sign Up</button>
+    <p>Already have an account? <button onclick="showLogin()">Login</button></p>
+  </div>
+
   <!-- Login Section -->
-  <div id="loginSection">
-    <h2>Login</h2>
-    <input type="text" id="username" placeholder="Username" />
-    <input type="password" id="password" placeholder="Password" />
+  <div id="loginSection" style="display:none;">
+    <h3>Login</h3>
+    <input type="text" id="loginUsername" placeholder="Username"/>
+    <input type="password" id="loginPassword" placeholder="Password"/>
     <button onclick="login()">Login</button>
+    <p>Don't have an account? <button onclick="showSignUp()">Sign Up</button></p>
   </div>
 
-  <!-- Photo Display Section -->
-  <div id="photos"></div>
-
-  <!-- Upload Section (only visible to creators) -->
-  <div id="uploadSection">
-    <h2>Upload a Photo</h2>
-    <input type="file" id="file" />
-    <input type="text" id="title" placeholder="Title" />
-    <input type="text" id="caption" placeholder="Caption" />
-    <input type="text" id="location" placeholder="Location" />
-    <button onclick="uploadPhoto()">Upload</button>
+  <!-- Consumer Section (After Login) -->
+  <div id="consumerSection" style="display:none;">
+    <h3>Welcome Consumer</h3>
+    <div id="photos"></div>
+    <div id="interaction" style="display:none;">
+      <h3 id="selectedTitle"></h3>
+      <textarea id="commentBox" placeholder="Write a comment..."></textarea>
+      <input id="ratingBox" type="number" min="1" max="5" placeholder="Rating 1-5"/>
+      <button onclick="submitComment()">Submit Comment</button>
+      <button onclick="submitRating()">Submit Rating</button>
+    </div>
   </div>
 
-  <!-- Interaction Section -->
-  <div id="interaction" style="margin-top: 30px;">
-    <h3 id="selectedTitle"></h3>
-    <textarea id="commentBox" placeholder="Write a comment..."></textarea>
-    <input id="ratingBox" type="number" min="1" max="5" placeholder="Rating 1-5"/>
-    <button onclick="submitComment()">Submit Comment</button>
-    <button onclick="submitRating()">Submit Rating</button>
+  <!-- Creator Section (After Login) -->
+  <div id="creatorSection" style="display:none;">
+    <h3>Welcome Creator</h3>
+    <div>
+      <h4>Upload Photo</h4>
+      <input type="file" id="photoFile"/>
+      <input type="text" id="photoTitle" placeholder="Title"/>
+      <textarea id="photoCaption" placeholder="Caption"></textarea>
+      <input type="text" id="photoLocation" placeholder="Location"/>
+      <button onclick="uploadPhoto()">Upload Photo</button>
+    </div>
+    <div id="uploadedPhotos"></div>
   </div>
 
   <script>
     let selectedTitle = "";
-    let token = localStorage.getItem("token");  // Retrieve token from localStorage
-    let userRole = "";
+    let userRole = ""; // 'consumer' or 'creator'
+    const backend = "https://app.azurewebsites.net";
 
-    const backend = "https://app.azurewebsites.net";  // Your backend URL
-
-    // Show login section if no token
-    if (!token) {
-      document.getElementById("loginSection").style.display = "block";
-    } else {
-      document.getElementById("loginSection").style.display = "none";
-      verifyToken();
+    function showSignUp() {
+      document.getElementById('loginSection').style.display = 'none';
+      document.getElementById('signUpSection').style.display = 'block';
     }
 
-    // Function to handle login
-    function login() {
-      const username = document.getElementById("username").value;
-      const password = document.getElementById("password").value;
-
-      fetch(`${backend}/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username, password }),
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (data.token) {
-          localStorage.setItem("token", data.token);
-          token = data.token;
-          verifyToken();
-        } else {
-          alert("Invalid credentials");
-        }
-      })
-      .catch(error => {
-        alert("Error during login");
-        console.error(error);
-      });
+    function showLogin() {
+      document.getElementById('signUpSection').style.display = 'none';
+      document.getElementById('loginSection').style.display = 'block';
     }
 
-    // Function to verify the token and fetch user role
-    function verifyToken() {
-      fetch(`${backend}/photos`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        }
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.error) {
-          localStorage.removeItem("token");
-          window.location.reload();
-        } else {
-          // User is logged in, determine their role
-          userRole = data.role;
-          loadPhotos();
-          if (userRole === "creator") {
-            document.getElementById("uploadSection").style.display = "block";
+    function signUp() {
+      const username = document.getElementById('signUpUsername').value;
+      const password = document.getElementById('signUpPassword').value;
+      const role = document.getElementById('userRole').value;
+
+      fetch(`${backend}/signup`, { // Adjust to your backend's actual endpoint
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, role })
+      }).then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            showLogin();
           }
-        }
-      })
-      .catch(error => {
-        alert("Error verifying token");
-        console.error(error);
-      });
-    }
-
-    // Function to load photos
-    function loadPhotos() {
-      fetch(`${backend}/photos`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        }
-      })
-      .then(res => res.json())
-      .then(data => {
-        const container = document.getElementById("photos");
-        container.innerHTML = "";  // Clear previous photos
-        data.forEach(photo => {
-          const div = document.createElement("div");
-          div.innerHTML = `
-            <img src="${photo.blob_url}" alt="${photo.title}" />
-            <p><b>${photo.title}</b> - ${photo.caption} (${photo.location})</p>
-            <button onclick="selectPhoto('${photo.title}')">Comment/Rate</button>
-          `;
-          container.appendChild(div);
         });
-      })
-      .catch(error => {
-        alert("Error loading photos");
-        console.error(error);
-      });
     }
 
-    // Function to select a photo for commenting or rating
+    function login() {
+      const username = document.getElementById('loginUsername').value;
+      const password = document.getElementById('loginPassword').value;
+
+      fetch(`${backend}/login`, { // Adjust to your backend's actual endpoint
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      }).then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            userRole = data.role; // 'consumer' or 'creator'
+            document.getElementById('loginSection').style.display = 'none';
+            if (userRole === 'consumer') {
+              document.getElementById('consumerSection').style.display = 'block';
+              loadPhotos();
+            } else {
+              document.getElementById('creatorSection').style.display = 'block';
+            }
+          }
+        });
+    }
+
+    function loadPhotos() {
+      fetch(`${backend}/photos`)
+        .then(res => res.json())
+        .then(data => {
+          const container = document.getElementById("photos");
+          data.forEach(photo => {
+            const div = document.createElement("div");
+            div.innerHTML = `
+              <img src="${photo.blob_url}" alt="${photo.title}"/>
+              <p><b>${photo.title}</b> - ${photo.caption} (${photo.location})</p>
+              <button onclick="selectPhoto('${photo.title}')">Comment/Rate</button>
+            `;
+            container.appendChild(div);
+          });
+        });
+    }
+
     function selectPhoto(title) {
       selectedTitle = title;
       document.getElementById("selectedTitle").innerText = `Commenting/Rating on: ${title}`;
+      document.getElementById("interaction").style.display = 'block';
     }
 
-    // Function to submit a comment
     function submitComment() {
       const comment = document.getElementById("commentBox").value;
       fetch(`${backend}/photos/${selectedTitle}/comment`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: "ConsumerUser", comment })
-      })
-      .then(response => response.json())
-      .then(data => {
-        alert("Comment submitted");
-        loadPhotos();
-      })
-      .catch(error => {
-        alert("Error submitting comment");
-        console.error(error);
       });
     }
 
-    // Function to submit a rating
     function submitRating() {
       const rating = document.getElementById("ratingBox").value;
       fetch(`${backend}/photos/${selectedTitle}/rate`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: "ConsumerUser", rating: parseInt(rating) })
-      })
-      .then(response => response.json())
-      .then(data => {
-        alert("Rating submitted");
-        loadPhotos();
-      })
-      .catch(error => {
-        alert("Error submitting rating");
-        console.error(error);
       });
     }
 
-    // Function to upload a photo (only for creators)
     function uploadPhoto() {
-      const file = document.getElementById("file").files[0];
-      const title = document.getElementById("title").value;
-      const caption = document.getElementById("caption").value;
-      const location = document.getElementById("location").value;
+      const file = document.getElementById("photoFile").files[0];
+      const title = document.getElementById("photoTitle").value;
+      const caption = document.getElementById("photoCaption").value;
+      const location = document.getElementById("photoLocation").value;
 
       const formData = new FormData();
       formData.append("file", file);
@@ -206,23 +170,31 @@
       formData.append("location", location);
 
       fetch(`${backend}/upload`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        },
-        body: formData,
-      })
-      .then(response => response.json())
-      .then(data => {
-        alert("Photo uploaded");
-        loadPhotos();
-      })
-      .catch(error => {
-        alert("Error uploading photo");
-        console.error(error);
-      });
+        method: 'POST',
+        body: formData
+      }).then(res => res.json())
+        .then(data => {
+          alert(data.message);
+          loadUploadedPhotos();
+        });
     }
 
+    function loadUploadedPhotos() {
+      fetch(`${backend}/photos`)
+        .then(res => res.json())
+        .then(data => {
+          const container = document.getElementById("uploadedPhotos");
+          container.innerHTML = "";
+          data.forEach(photo => {
+            const div = document.createElement("div");
+            div.innerHTML = `
+              <img src="${photo.blob_url}" alt="${photo.title}"/>
+              <p><b>${photo.title}</b> - ${photo.caption} (${photo.location})</p>
+            `;
+            container.appendChild(div);
+          });
+        });
+    }
   </script>
 </body>
 </html>
