@@ -4,4 +4,4 @@ pymongo
 azure-storage-blob
 gunicorn
 python-dotenv
-
+pyjwt

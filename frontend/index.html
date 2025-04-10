@@ -7,27 +7,34 @@
   <style>
     img { width: 300px; margin: 10px; }
     textarea, input { width: 300px; margin: 5px 0; display: block; }
+    #uploadSection { display: none; }
   </style>
 </head>
 <body>
   <h1>📸 Photo Sharing App</h1>
 
-  <!-- For Creator User -->
-  <div id="creatorView" style="display: none;">
-    <h2>Upload New Photo</h2>
-    <form id="uploadForm">
-      <input id="photoTitle" type="text" placeholder="Title" required/><br>
-      <input id="photoCaption" type="text" placeholder="Caption" required/><br>
-      <input id="photoLocation" type="text" placeholder="Location" required/><br>
-      <input id="photoPeople" type="text" placeholder="People Present" required/><br>
-      <input type="file" id="photoFile" required/><br>
-      <button type="submit">Upload Photo</button>
-    </form>
+  <!-- Login Section -->
+  <div id="loginSection">
+    <h2>Login</h2>
+    <input type="text" id="username" placeholder="Username" />
+    <input type="password" id="password" placeholder="Password" />
+    <button onclick="login()">Login</button>
   </div>
 
-  <!-- For Consumer User -->
+  <!-- Photo Display Section -->
   <div id="photos"></div>
 
+  <!-- Upload Section (only visible to creators) -->
+  <div id="uploadSection">
+    <h2>Upload a Photo</h2>
+    <input type="file" id="file" />
+    <input type="text" id="title" placeholder="Title" />
+    <input type="text" id="caption" placeholder="Caption" />
+    <input type="text" id="location" placeholder="Location" />
+    <button onclick="uploadPhoto()">Upload</button>
+  </div>
+
+  <!-- Interaction Section -->
   <div id="interaction" style="margin-top: 30px;">
     <h3 id="selectedTitle"></h3>
     <textarea id="commentBox" placeholder="Write a comment..."></textarea>
@@ -37,87 +44,185 @@
   </div>
 
   <script>
-    const backend = "https://app.azurewebsites.net"; // Your backend URL
     let selectedTitle = "";
-    const userType = "consumer"; // Change to "creator" if the logged-in user is a creator
+    let token = localStorage.getItem("token");  // Retrieve token from localStorage
+    let userRole = "";
 
-    // Toggle views based on user type
-    function showView() {
-      if (userType === "creator") {
-        document.getElementById("creatorView").style.display = "block";
-        document.getElementById("photos").style.display = "none";
-      } else {
-        document.getElementById("creatorView").style.display = "none";
-        document.getElementById("photos").style.display = "block";
-        loadPhotos();
-      }
+    const backend = "https://app.azurewebsites.net";  // Your backend URL
+
+    // Show login section if no token
+    if (!token) {
+      document.getElementById("loginSection").style.display = "block";
+    } else {
+      document.getElementById("loginSection").style.display = "none";
+      verifyToken();
     }
 
-    // Load photos for consumer users
+    // Function to handle login
+    function login() {
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+
+      fetch(`${backend}/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ username, password }),
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.token) {
+          localStorage.setItem("token", data.token);
+          token = data.token;
+          verifyToken();
+        } else {
+          alert("Invalid credentials");
+        }
+      })
+      .catch(error => {
+        alert("Error during login");
+        console.error(error);
+      });
+    }
+
+    // Function to verify the token and fetch user role
+    function verifyToken() {
+      fetch(`${backend}/photos`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          localStorage.removeItem("token");
+          window.location.reload();
+        } else {
+          // User is logged in, determine their role
+          userRole = data.role;
+          loadPhotos();
+          if (userRole === "creator") {
+            document.getElementById("uploadSection").style.display = "block";
+          }
+        }
+      })
+      .catch(error => {
+        alert("Error verifying token");
+        console.error(error);
+      });
+    }
+
+    // Function to load photos
     function loadPhotos() {
-      fetch(`${backend}/photos`)
-        .then(res => res.json())
-        .then(data => {
-          const container = document.getElementById("photos");
-          container.innerHTML = ''; // Clear previous data
-          data.forEach(photo => {
-            const div = document.createElement("div");
-            div.innerHTML = `
-              <img src="${photo.blob_url}" alt="${photo.title}"/>
-              <p><b>${photo.title}</b> - ${photo.caption} (${photo.location})</p>
-              <button onclick="selectPhoto('${photo.title}')">Comment/Rate</button>
-            `;
-            container.appendChild(div);
-          });
+      fetch(`${backend}/photos`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      })
+      .then(res => res.json())
+      .then(data => {
+        const container = document.getElementById("photos");
+        container.innerHTML = "";  // Clear previous photos
+        data.forEach(photo => {
+          const div = document.createElement("div");
+          div.innerHTML = `
+            <img src="${photo.blob_url}" alt="${photo.title}" />
+            <p><b>${photo.title}</b> - ${photo.caption} (${photo.location})</p>
+            <button onclick="selectPhoto('${photo.title}')">Comment/Rate</button>
+          `;
+          container.appendChild(div);
         });
+      })
+      .catch(error => {
+        alert("Error loading photos");
+        console.error(error);
+      });
     }
 
-    // Select a photo for commenting/rating
+    // Function to select a photo for commenting or rating
     function selectPhoto(title) {
       selectedTitle = title;
       document.getElementById("selectedTitle").innerText = `Commenting/Rating on: ${title}`;
     }
 
-    // Submit comment for a photo
+    // Function to submit a comment
     function submitComment() {
       const comment = document.getElementById("commentBox").value;
       fetch(`${backend}/photos/${selectedTitle}/comment`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ user: "ConsumerUser", comment })
+      })
+      .then(response => response.json())
+      .then(data => {
+        alert("Comment submitted");
+        loadPhotos();
+      })
+      .catch(error => {
+        alert("Error submitting comment");
+        console.error(error);
       });
     }
 
-    // Submit rating for a photo
+    // Function to submit a rating
     function submitRating() {
       const rating = document.getElementById("ratingBox").value;
       fetch(`${backend}/photos/${selectedTitle}/rate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ user: "ConsumerUser", rating: parseInt(rating) })
+      })
+      .then(response => response.json())
+      .then(data => {
+        alert("Rating submitted");
+        loadPhotos();
+      })
+      .catch(error => {
+        alert("Error submitting rating");
+        console.error(error);
       });
     }
 
-    // Upload photo (for creators)
-    document.getElementById("uploadForm").addEventListener("submit", function (e) {
-      e.preventDefault();
-      const formData = new FormData();
-      formData.append('title', document.getElementById("photoTitle").value);
-      formData.append('caption', document.getElementById("photoCaption").value);
-      formData.append('location', document.getElementById("photoLocation").value);
-      formData.append('people', document.getElementById("photoPeople").value);
-      formData.append('photo', document.getElementById("photoFile").files[0]);
+    // Function to upload a photo (only for creators)
+    function uploadPhoto() {
+      const file = document.getElementById("file").files[0];
+      const title = document.getElementById("title").value;
+      const caption = document.getElementById("caption").value;
+      const location = document.getElementById("location").value;
 
-      fetch(`${backend}/photos`, {
-        method: 'POST',
-        body: formData
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("title", title);
+      formData.append("caption", caption);
+      formData.append("location", location);
+
+      fetch(`${backend}/upload`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${token}`,
+        },
+        body: formData,
       })
       .then(response => response.json())
-      .then(data => alert('Photo uploaded successfully!'))
-      .catch(error => console.error('Error:', error));
-    });
+      .then(data => {
+        alert("Photo uploaded");
+        loadPhotos();
+      })
+      .catch(error => {
+        alert("Error uploading photo");
+        console.error(error);
+      });
+    }
 
-    window.onload = showView;
   </script>
 </body>
 </html>
