@@ -11,6 +11,21 @@
 </head>
 <body>
   <h1>📸 Photo Sharing App</h1>
+
+  <!-- For Creator User -->
+  <div id="creatorView" style="display: none;">
+    <h2>Upload New Photo</h2>
+    <form id="uploadForm">
+      <input id="photoTitle" type="text" placeholder="Title" required/><br>
+      <input id="photoCaption" type="text" placeholder="Caption" required/><br>
+      <input id="photoLocation" type="text" placeholder="Location" required/><br>
+      <input id="photoPeople" type="text" placeholder="People Present" required/><br>
+      <input type="file" id="photoFile" required/><br>
+      <button type="submit">Upload Photo</button>
+    </form>
+  </div>
+
+  <!-- For Consumer User -->
   <div id="photos"></div>
 
   <div id="interaction" style="margin-top: 30px;">
@@ -22,14 +37,29 @@
   </div>
 
   <script>
+    const backend = "https://app.azurewebsites.net"; // Your backend URL
     let selectedTitle = "";
-    const backend = "https://app.azurewebsites.net";
+    const userType = "consumer"; // Change to "creator" if the logged-in user is a creator
 
+    // Toggle views based on user type
+    function showView() {
+      if (userType === "creator") {
+        document.getElementById("creatorView").style.display = "block";
+        document.getElementById("photos").style.display = "none";
+      } else {
+        document.getElementById("creatorView").style.display = "none";
+        document.getElementById("photos").style.display = "block";
+        loadPhotos();
+      }
+    }
+
+    // Load photos for consumer users
     function loadPhotos() {
       fetch(`${backend}/photos`)
         .then(res => res.json())
         .then(data => {
           const container = document.getElementById("photos");
+          container.innerHTML = ''; // Clear previous data
           data.forEach(photo => {
             const div = document.createElement("div");
             div.innerHTML = `
@@ -42,11 +72,13 @@
         });
     }
 
+    // Select a photo for commenting/rating
     function selectPhoto(title) {
       selectedTitle = title;
       document.getElementById("selectedTitle").innerText = `Commenting/Rating on: ${title}`;
     }
 
+    // Submit comment for a photo
     function submitComment() {
       const comment = document.getElementById("commentBox").value;
       fetch(`${backend}/photos/${selectedTitle}/comment`, {
@@ -56,6 +88,7 @@
       });
     }
 
+    // Submit rating for a photo
     function submitRating() {
       const rating = document.getElementById("ratingBox").value;
       fetch(`${backend}/photos/${selectedTitle}/rate`, {
@@ -65,7 +98,26 @@
       });
     }
 
-    window.onload = loadPhotos;
+    // Upload photo (for creators)
+    document.getElementById("uploadForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      const formData = new FormData();
+      formData.append('title', document.getElementById("photoTitle").value);
+      formData.append('caption', document.getElementById("photoCaption").value);
+      formData.append('location', document.getElementById("photoLocation").value);
+      formData.append('people', document.getElementById("photoPeople").value);
+      formData.append('photo', document.getElementById("photoFile").files[0]);
+
+      fetch(`${backend}/photos`, {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => alert('Photo uploaded successfully!'))
+      .catch(error => console.error('Error:', error));
+    });
+
+    window.onload = showView;
   </script>
 </body>
 </html>
