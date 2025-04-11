@@ -95,12 +95,12 @@ def signup():
     role = request.json.get('role')
     
     if not username or not password or not role:
-        return jsonify({"error": "Missing required fields"}), 400
+        return jsonify({"error": "Missing required fields"})
 
     # Check if the username already exists
     existing_user = users.find_one({"username": username})
     if existing_user:
-        return jsonify({"error": "Username already exists"}), 400
+        return jsonify({"error": "Username already exists"})
 
     # Save the new user (you should hash the password in a real app)
     new_user = {
