@@ -118,7 +118,9 @@ def signup():
 
 
 
-
+@app.route('/health')
+def health_check():
+    return jsonify({"status": "healthy"})
 
 
 
@@ -182,5 +184,4 @@ def rate(title):
     ratings.insert_one(rating_data)
     return jsonify({"message": "Rating added"})
 
-if __name__ == '__main__':
-    app.run(debug=True)
+
