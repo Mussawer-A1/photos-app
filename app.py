@@ -28,14 +28,24 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 
 
 def upload_file_to_blob(file, filename):
-    connect_str = os.getenv("BLOB_CONN")
-    container_name = "photo-container"
+    try:
+        connect_str = os.getenv("BLOB_CONN")
+        if not connect_str:
+            raise ValueError("BLOB_CONN environment variable not set.")
 
-    blob_service_client = BlobServiceClient.from_connection_string(connect_str)
-    container_client = blob_service_client.get_container_client(container_name)
-    blob_client = container_client.get_blob_client(filename)
-    blob_client.upload_blob(file, overwrite=True)
-    return blob_client.url
+        container_name = "photo-container"
+        blob_service_client = BlobServiceClient.from_connection_string(connect_str)
+        container_client = blob_service_client.get_container_client(container_name)
+        blob_client = container_client.get_blob_client(filename)
+
+        # Upload directly using the FileStorage object
+        blob_client.upload_blob(file, overwrite=True)
+
+        return blob_client.url
+
+    except Exception as e:
+        print(f"Error during file upload: {e}")
+        raise
 
 
 # Function to generate JWT token
@@ -53,7 +63,7 @@ def token_required(f):
     def decorator(*args, **kwargs):
         token = None
         if "Authorization" in request.headers:
-            token = request.headers["Authorization"].split(" ")[1]  # Extract token from "Bearer <token>"
+            token = request.headers["Authorization"].split(" ")[1]
 
         if not token:
             return jsonify({"error": "Token is missing"}), 403
@@ -63,27 +73,26 @@ def token_required(f):
             current_user = users.find_one({"_id": data["user_id"]})
             if not current_user:
                 return jsonify({"error": "User not found"}), 404
-            request.user = current_user
-            request.role = data["role"]
+            g.user = current_user
+            g.role = data["role"]
         except jwt.ExpiredSignatureError:
             return jsonify({"error": "Token has expired"}), 401
         except jwt.InvalidTokenError:
             return jsonify({"error": "Invalid token"}), 401
+
         return f(*args, **kwargs)
     
     return decorator
 
-# Function to check user role
 def check_role(required_role):
     def wrapper(f):
         @wraps(f)
         def decorator(*args, **kwargs):
-            if request.role != required_role:
+            if not hasattr(g, "role") or g.role != required_role:
                 return jsonify({"error": f"Permission denied. {required_role} role required."}), 403
             return f(*args, **kwargs)
         return decorator
     return wrapper
-
 
 
 
@@ -152,7 +161,9 @@ def upload_photo():
     metadata = request.form.to_dict()
     
     filename = str(uuid.uuid4()) + "_" + file.filename
+    print("About to upload to container")
     blob_url = upload_file_to_blob(file, filename)
+    print("Uploaded to container")
     
     metadata.update({
         "blob_url": blob_url,
