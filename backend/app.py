@@ -84,6 +84,45 @@ def check_role(required_role):
         return decorator
     return wrapper
 
+
+
+
+
+@app.route('/signup', methods=['POST'])
+def signup():
+    username = request.json.get('username')
+    password = request.json.get('password')
+    role = request.json.get('role')
+    
+    if not username or not password or not role:
+        return jsonify({"error": "Missing required fields"}), 400
+
+    # Check if the username already exists
+    existing_user = users.find_one({"username": username})
+    if existing_user:
+        return jsonify({"error": "Username already exists"}), 400
+
+    # Save the new user (you should hash the password in a real app)
+    new_user = {
+        "username": username,
+        "password": password,
+        "role": role,
+        "created_at": datetime.utcnow()
+    }
+    users.insert_one(new_user)
+    
+    # Generate JWT token for the new user
+    token = generate_token(str(new_user["_id"]), role)
+    return jsonify({"message": "User created", "token": token})
+
+
+
+
+
+
+
+
+
 @app.route('/login', methods=['POST'])
 def login():
     # Simulating user login
