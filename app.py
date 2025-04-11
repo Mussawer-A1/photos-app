@@ -138,7 +138,11 @@ def login():
     
     # Generate JWT token with the user's ID and role
     token = generate_token(str(user["_id"]), user["role"])
-    return jsonify({"token": token})
+    return jsonify({
+    "success": True,
+    "token": token,
+    "role": user["role"]
+})
 
 @app.route('/upload', methods=['POST'])
 @token_required
