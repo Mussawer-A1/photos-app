@@ -156,7 +156,7 @@ def login():
 
 @app.route('/upload', methods=['POST'])
 # @token_required
-@check_role("creator")  # Only creators can upload photos
+# @check_role("creator")  # Only creators can upload photos
 def upload_photo():
     file = request.files['file']
     metadata = request.form.to_dict()
