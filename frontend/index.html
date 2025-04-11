@@ -91,12 +91,12 @@
         alert("Signup successful. Please log in.");
         showLogin();
       } else {
-        console.log(res);
+        console.log(data);
         alert(data.error || "Signup failed");
         
       }
     }).catch(err => {
-      console.log(res);
+      console.log(data);
       alert("Signup error: " + err.message);
     });
 }
