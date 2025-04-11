@@ -155,7 +155,7 @@ def login():
 })
 
 @app.route('/upload', methods=['POST'])
-@token_required
+# @token_required
 @check_role("creator")  # Only creators can upload photos
 def upload_photo():
     file = request.files['file']
@@ -175,13 +175,13 @@ def upload_photo():
     return jsonify({"message": "Photo uploaded", "blob_url": blob_url})
 
 @app.route('/photos', methods=['GET'])
-@token_required
+# @token_required
 def list_photos():
     photo_list = list(photos.find({}, {'_id': 0}))
     return jsonify(photo_list)
 
 @app.route('/photos/<title>/comment', methods=['POST'])
-@token_required
+# @token_required
 def comment(title):
     comment_data = request.json
     comment_data["photo_title"] = title
@@ -191,7 +191,7 @@ def comment(title):
     return jsonify({"message": "Comment added"})
 
 @app.route('/photos/<title>/rate', methods=['POST'])
-@token_required
+# @token_required
 def rate(title):
     rating_data = request.json
     rating_data["photo_title"] = title
