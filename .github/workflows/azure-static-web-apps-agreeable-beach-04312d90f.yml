@@ -2,65 +2,45 @@ name: Azure Static Web Apps CI/CD
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, closed]
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   build_and_deploy_job:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
-    name: Build and Deploy Job
-    permissions:
-      id-token: write
-      contents: read
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-          lfs: false
-      
-      # Frontend build step (if needed)
-      - name: Build Frontend
-        working-directory: frontend
-        run: |
-          npm install
-          npm run build
+      - uses: actions/checkout@v3  # Checkout your code
 
-      # Backend setup
+      # Only setup Python for Flask backend (no Node/npm needed)
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-      
+
+      # Install Python dependencies
       - name: Install backend dependencies
         working-directory: backend
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # Deploy (no frontend build needed)
       - name: Build And Deploy
-        id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
-          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_AGREEABLE_BEACH_04312D90F }}
-          action: "upload"
-          app_location: "frontend" # Changed from "/frontend"
-          api_location: "backend/api" # Point to the api subfolder
-          output_location: "." # Or your frontend build folder
-          api_build_command: "echo 'API built during dependency installation'"
-          github_id_token: ${{ steps.idtoken.outputs.result }}
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          app_location: "frontend"     # Your HTML folder
+          output_location: "."         # Serve files directly from app_location
+          api_location: "backend/api"  # Your Flask API
+          api_build_command: "echo 'API dependencies already installed'"
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
     runs-on: ubuntu-latest
-    name: Close Pull Request Job
     steps:
       - name: Close Pull Request
-        id: closepullrequest
         uses: Azure/static-web-apps-deploy@v1
         with:
           action: "close"
