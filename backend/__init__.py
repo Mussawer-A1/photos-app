@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from azure.storage.blob import BlobServiceClient
+import azure.functions as func
 import uuid
 import pymongo
 from datetime import datetime, timedelta
@@ -185,3 +186,7 @@ def rate(title):
     return jsonify({"message": "Rating added"})
 
 
+def main(req: func.HttpRequest, context: func.Context) -> func.HttpResponse:
+    """Azure Functions entry point."""
+    from azure.functions import WsgiMiddleware
+    return WsgiMiddleware(app.wsgi_app).handle(req, context)
