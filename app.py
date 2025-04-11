@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from azure.storage.blob import BlobServiceClient
-import azure.functions as func
 import uuid
 import pymongo
 from datetime import datetime, timedelta
@@ -89,7 +88,7 @@ def check_role(required_role):
 
 
 
-@app.route('/api/signup', methods=['POST'])
+@app.route('/signup', methods=['POST'])
 def signup():
     username = request.json.get('username')
     password = request.json.get('password')
@@ -119,14 +118,14 @@ def signup():
 
 
 
-@app.route('/api/health')
+@app.route('/health')
 def health_check():
     return jsonify({"status": "healthy"})
 
 
 
 
-@app.route('/api/login', methods=['POST'])
+@app.route('/login', methods=['POST'])
 def login():
     # Simulating user login
     username = request.json.get('username')
@@ -141,7 +140,7 @@ def login():
     token = generate_token(str(user["_id"]), user["role"])
     return jsonify({"token": token})
 
-@app.route('/api/upload', methods=['POST'])
+@app.route('/upload', methods=['POST'])
 @token_required
 @check_role("creator")  # Only creators can upload photos
 def upload_photo():
@@ -159,13 +158,13 @@ def upload_photo():
     photos.insert_one(metadata)
     return jsonify({"message": "Photo uploaded", "blob_url": blob_url})
 
-@app.route('/api/photos', methods=['GET'])
+@app.route('/photos', methods=['GET'])
 @token_required
 def list_photos():
     photo_list = list(photos.find({}, {'_id': 0}))
     return jsonify(photo_list)
 
-@app.route('/api/photos/<title>/comment', methods=['POST'])
+@app.route('/photos/<title>/comment', methods=['POST'])
 @token_required
 def comment(title):
     comment_data = request.json
@@ -175,7 +174,7 @@ def comment(title):
     comments.insert_one(comment_data)
     return jsonify({"message": "Comment added"})
 
-@app.route('/api/photos/<title>/rate', methods=['POST'])
+@app.route('/photos/<title>/rate', methods=['POST'])
 @token_required
 def rate(title):
     rating_data = request.json
@@ -184,9 +183,3 @@ def rate(title):
     
     ratings.insert_one(rating_data)
     return jsonify({"message": "Rating added"})
-
-
-def main(req: func.HttpRequest, context: func.Context) -> func.HttpResponse:
-    """Azure Functions entry point."""
-    from azure.functions import WsgiMiddleware
-    return WsgiMiddleware(app.wsgi_app).handle(req, context)
