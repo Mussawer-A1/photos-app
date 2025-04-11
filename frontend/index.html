@@ -81,7 +81,7 @@
       const password = document.getElementById('signUpPassword').value;
       const role = document.getElementById('userRole').value;
 
-      fetch(`${backend}/signup`, { // Adjust to your backend's actual endpoint
+      fetch(`${backend}/signup/`, { // Adjust to your backend's actual endpoint
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, role })
@@ -97,7 +97,7 @@
       const username = document.getElementById('loginUsername').value;
       const password = document.getElementById('loginPassword').value;
 
-      fetch(`${backend}/login`, { // Adjust to your backend's actual endpoint
+      fetch(`${backend}/login/`, { // Adjust to your backend's actual endpoint
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
@@ -141,7 +141,7 @@
 
     function submitComment() {
       const comment = document.getElementById("commentBox").value;
-      fetch(`${backend}/photos/${selectedTitle}/comment`, {
+      fetch(`${backend}/photos/${selectedTitle}/comment/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: "ConsumerUser", comment })
@@ -150,7 +150,7 @@
 
     function submitRating() {
       const rating = document.getElementById("ratingBox").value;
-      fetch(`${backend}/photos/${selectedTitle}/rate`, {
+      fetch(`${backend}/photos/${selectedTitle}/rate/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: "ConsumerUser", rating: parseInt(rating) })
@@ -169,7 +169,7 @@
       formData.append("caption", caption);
       formData.append("location", location);
 
-      fetch(`${backend}/upload`, {
+      fetch(`${backend}/upload/`, {
         method: 'POST',
         body: formData
       }).then(res => res.json())
@@ -180,7 +180,7 @@
     }
 
     function loadUploadedPhotos() {
-      fetch(`${backend}/photos`)
+      fetch(`${backend}/photos/`)
         .then(res => res.json())
         .then(data => {
           const container = document.getElementById("uploadedPhotos");
