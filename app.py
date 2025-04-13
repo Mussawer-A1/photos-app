@@ -9,6 +9,9 @@ from dotenv import load_dotenv
 import os
 import jwt
 from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
+import json
+from bson import json_util
 
 # Load environment variables
 load_dotenv()
@@ -27,6 +30,8 @@ users = db['users']  # For storing users
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 
+def parse_json(data):
+    return json.loads(json_util.dumps(data))
 
 def upload_file_to_blob(file, filename):
     try:
@@ -48,13 +53,12 @@ def upload_file_to_blob(file, filename):
         print(f"Error during file upload: {e}")
         raise
 
-
 # Function to generate JWT token
 def generate_token(user_id, role):
     payload = {
         "user_id": user_id,
         "role": role,
-        "exp": datetime.utcnow() + timedelta(hours=1)  # Token expires in 1 hour
+        "exp": datetime.utcnow() + timedelta(hours=24)  # Token expires in 24 hours
     }
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
@@ -107,9 +111,6 @@ def check_role(required_role):
         return decorator
     return wrapper
 
-
-
-
 @app.route('/signup', methods=['POST'])
 def signup():
     username = request.json.get('username')
@@ -126,105 +127,216 @@ def signup():
     # Only allow consumer signups
     new_user = {
         "username": username,
-        "password": password,  # In production, hash this password!
+        "password": generate_password_hash(password),  # Hash the password
         "role": "consumer",    # Force role to consumer
         "created_at": datetime.utcnow()
     }
-    users.insert_one(new_user)
+    result = users.insert_one(new_user)
     
     # Generate JWT token for the new user
-    token = generate_token(str(new_user["_id"]), "consumer")
-    return jsonify({"message": "User created", "token": token})
-
-
-
-
-@app.route('/health')
-def health_check():
-    return jsonify({"status": "healthy"})
-
-
-
+    token = generate_token(str(result.inserted_id), "consumer")
+    return jsonify({
+        "message": "User created successfully",
+        "token": token,
+        "role": "consumer"
+    })
 
 @app.route('/login', methods=['POST'])
 def login():
-    # Simulating user login
     username = request.json.get('username')
     password = request.json.get('password')
     
-    # Find user by username in MongoDB (you should hash passwords in a real app)
-    user = users.find_one({"username": username, "password": password})
+    if not username or not password:
+        return jsonify({"error": "Missing username or password"}), 400
+
+    # Find user by username
+    user = users.find_one({"username": username})
     if not user:
         return jsonify({"error": "Invalid credentials"}), 401
     
-    # Generate JWT token with the user's ID and role
+    # Check password
+    if not check_password_hash(user['password'], password):
+        return jsonify({"error": "Invalid credentials"}), 401
+    
+    # Generate JWT token
     token = generate_token(str(user["_id"]), user["role"])
     return jsonify({
-    "success": True,
-    "token": token,
-    "role": user["role"]
-})
+        "success": True,
+        "token": token,
+        "role": user["role"],
+        "message": "Login successful"
+    })
 
 @app.route('/upload', methods=['POST'])
-# @token_required
-# @check_role("creator")  # Only creators can upload photos
+@token_required
+@check_role("creator")
 def upload_photo():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+    
     file = request.files['file']
-    metadata = request.form.to_dict()
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
     
-    filename = str(uuid.uuid4()) + "_" + file.filename
-    print("About to upload to container")
-    blob_url = upload_file_to_blob(file, filename)
-    print("Uploaded to container")
+    title = request.form.get('title')
+    if not title:
+        return jsonify({"error": "Title is required"}), 400
     
-    metadata.update({
-        "blob_url": blob_url,
-        "uploaded_at": datetime.utcnow(),
-    })
-    
-    photos.insert_one(metadata)
-    return jsonify({"message": "Photo uploaded", "blob_url": blob_url})
+    try:
+        filename = str(uuid.uuid4()) + "_" + file.filename
+        blob_url = upload_file_to_blob(file, filename)
+        
+        photo_data = {
+            "title": title,
+            "caption": request.form.get('caption', ''),
+            "location": request.form.get('location', ''),
+            "blob_url": blob_url,
+            "uploaded_by": g.user_id,
+            "uploaded_at": datetime.utcnow(),
+            "username": g.user['username']
+        }
+        
+        photos.insert_one(photo_data)
+        
+        return jsonify({
+            "message": "Photo uploaded successfully",
+            "photo": {
+                "title": photo_data['title'],
+                "blob_url": photo_data['blob_url'],
+                "caption": photo_data['caption'],
+                "location": photo_data['location']
+            }
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/photos', methods=['GET'])
-# @token_required
+@token_required
 def list_photos():
-    photo_list = list(photos.find({}, {'_id': 0}))
-    return jsonify(photo_list)
+    try:
+        photo_list = list(photos.find({}, {'_id': 0}))
+        return jsonify(photo_list)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/photos/<title>/comment', methods=['POST'])
-# @token_required
-def comment(title):
-    comment_data = request.json
-    comment_data["photo_title"] = title
-    comment_data["timestamp"] = datetime.utcnow()
+@app.route('/photos/user', methods=['GET'])
+@token_required
+def list_user_photos():
+    try:
+        user_photos = list(photos.find({"uploaded_by": g.user_id}, {'_id': 0}))
+        return jsonify(user_photos)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/photos/<photo_title>', methods=['GET'])
+@token_required
+def get_photo_details(photo_title):
+    try:
+        photo = photos.find_one({"title": photo_title}, {'_id': 0})
+        if not photo:
+            return jsonify({"error": "Photo not found"}), 404
+        
+        # Get comments
+        photo_comments = list(comments.find({"photo_title": photo_title}, {'_id': 0}))
+        
+        # Get average rating
+        rating_cursor = ratings.aggregate([
+            {"$match": {"photo_title": photo_title}},
+            {"$group": {"_id": "$photo_title", "average": {"$avg": "$rating"}}}
+        ])
+        average_rating = list(rating_cursor)
+        
+        response = {
+            "photo": photo,
+            "comments": photo_comments,
+            "average_rating": average_rating[0]['average'] if average_rating else 0
+        }
+        
+        return jsonify(response)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/photos/<photo_title>/comment', methods=['POST'])
+@token_required
+def add_comment(photo_title):
+    text = request.json.get('text')
+    if not text:
+        return jsonify({"error": "Comment text is required"}), 400
     
-    comments.insert_one(comment_data)
-    return jsonify({"message": "Comment added"})
+    try:
+        comment_data = {
+            "photo_title": photo_title,
+            "user_id": g.user_id,
+            "username": g.user['username'],
+            "text": text,
+            "timestamp": datetime.utcnow()
+        }
+        
+        comments.insert_one(comment_data)
+        return jsonify({"message": "Comment added successfully"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-@app.route('/photos/<title>/rate', methods=['POST'])
-# @token_required
-def rate(title):
-    rating_data = request.json
-    rating_data["photo_title"] = title
-    rating_data["timestamp"] = datetime.utcnow()
+@app.route('/photos/<photo_title>/rate', methods=['POST'])
+@token_required
+def add_rating(photo_title):
+    rating = request.json.get('rating')
+    if not rating or not isinstance(rating, int) or rating < 1 or rating > 5:
+        return jsonify({"error": "Rating must be an integer between 1 and 5"}), 400
     
-    ratings.insert_one(rating_data)
-    return jsonify({"message": "Rating added"})
-
+    try:
+        # Check if user already rated this photo
+        existing_rating = ratings.find_one({
+            "photo_title": photo_title,
+            "user_id": g.user_id
+        })
+        
+        if existing_rating:
+            ratings.update_one(
+                {"_id": existing_rating['_id']},
+                {"$set": {"rating": rating}}
+            )
+            message = "Rating updated successfully"
+        else:
+            rating_data = {
+                "photo_title": photo_title,
+                "user_id": g.user_id,
+                "username": g.user['username'],
+                "rating": rating,
+                "timestamp": datetime.utcnow()
+            }
+            ratings.insert_one(rating_data)
+            message = "Rating added successfully"
+        
+        return jsonify({"message": message})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/photos/search', methods=['GET'])
 @token_required
 def search_photos():
     query = request.args.get('q', '')
+    if not query:
+        return jsonify({"error": "Search query is required"}), 400
     
-    # Search in title, caption, and location fields
-    regex_query = {'$regex': query, '$options': 'i'}  # 'i' for case insensitive
-    results = list(photos.find({
-        '$or': [
-            {'title': regex_query},
-            {'caption': regex_query},
-            {'location': regex_query}
-        ]
-    }, {'_id': 0}))
-    
-    return jsonify(results)
+    try:
+        regex_query = {'$regex': query, '$options': 'i'}  # 'i' for case insensitive
+        results = list(photos.find({
+            '$or': [
+                {'title': regex_query},
+                {'caption': regex_query},
+                {'location': regex_query},
+                {'username': regex_query}
+            ]
+        }, {'_id': 0}))
+        
+        return jsonify(results)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/health', methods=['GET'])
+def health_check():
+    return jsonify({"status": "healthy", "timestamp": datetime.utcnow().isoformat()})
+
+if __name__ == '__main__':
+    app.run(debug=True)
