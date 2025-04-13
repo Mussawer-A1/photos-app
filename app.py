@@ -63,23 +63,29 @@ def token_required(f):
     @wraps(f)
     def decorator(*args, **kwargs):
         token = None
+        # Check for token in Authorization header
         if "Authorization" in request.headers:
-            token = request.headers["Authorization"].split(" ")[1]
+            parts = request.headers["Authorization"].split(" ")
+            if len(parts) == 2 and parts[0].lower() == "bearer":
+                token = parts[1]
 
         if not token:
-            return jsonify({"error": "Token is missing"}), 403
+            return jsonify({"error": "Authentication required", "message": "No token provided"}), 401
         
         try:
             data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
             current_user = users.find_one({"_id": data["user_id"]})
             if not current_user:
-                return jsonify({"error": "User not found"}), 404
+                return jsonify({"error": "User not found", "message": "User account may have been deleted"}), 404
             g.user = current_user
             g.role = data["role"]
+            g.user_id = str(current_user["_id"])  # Store user ID as string
         except jwt.ExpiredSignatureError:
-            return jsonify({"error": "Token has expired"}), 401
+            return jsonify({"error": "Token expired", "message": "Please log in again"}), 401
         except jwt.InvalidTokenError:
-            return jsonify({"error": "Invalid token"}), 401
+            return jsonify({"error": "Invalid token", "message": "Authentication failed"}), 401
+        except Exception as e:
+            return jsonify({"error": "Authentication error", "message": str(e)}), 401
 
         return f(*args, **kwargs)
     
@@ -89,8 +95,14 @@ def check_role(required_role):
     def wrapper(f):
         @wraps(f)
         def decorator(*args, **kwargs):
-            if not hasattr(g, "role") or g.role != required_role:
-                return jsonify({"error": f"Permission denied. {required_role} role required."}), 403
+            if not hasattr(g, "role"):
+                return jsonify({"error": "Authorization error", "message": "User role not found"}), 403
+            if g.role != required_role:
+                return jsonify({
+                    "error": "Permission denied",
+                    "message": f"Requires {required_role} role",
+                    "your_role": g.role
+                }), 403
             return f(*args, **kwargs)
         return decorator
     return wrapper
@@ -102,27 +114,26 @@ def check_role(required_role):
 def signup():
     username = request.json.get('username')
     password = request.json.get('password')
-    role = request.json.get('role')
     
-    if not username or not password or not role:
-        return jsonify({"error": "Missing required fields"})
+    if not username or not password:
+        return jsonify({"error": "Missing required fields"}), 400
 
     # Check if the username already exists
     existing_user = users.find_one({"username": username})
     if existing_user:
-        return jsonify({"error": "Username already exists"})
+        return jsonify({"error": "Username already exists"}), 409
 
-    # Save the new user (you should hash the password in a real app)
+    # Only allow consumer signups
     new_user = {
         "username": username,
-        "password": password,
-        "role": role,
+        "password": password,  # In production, hash this password!
+        "role": "consumer",    # Force role to consumer
         "created_at": datetime.utcnow()
     }
     users.insert_one(new_user)
     
     # Generate JWT token for the new user
-    token = generate_token(str(new_user["_id"]), role)
+    token = generate_token(str(new_user["_id"]), "consumer")
     return jsonify({"message": "User created", "token": token})
 
 
@@ -199,3 +210,21 @@ def rate(title):
     
     ratings.insert_one(rating_data)
     return jsonify({"message": "Rating added"})
+
+
+@app.route('/photos/search', methods=['GET'])
+@token_required
+def search_photos():
+    query = request.args.get('q', '')
+    
+    # Search in title, caption, and location fields
+    regex_query = {'$regex': query, '$options': 'i'}  # 'i' for case insensitive
+    results = list(photos.find({
+        '$or': [
+            {'title': regex_query},
+            {'caption': regex_query},
+            {'location': regex_query}
+        ]
+    }, {'_id': 0}))
+    
+    return jsonify(results)
