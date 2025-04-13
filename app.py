@@ -168,8 +168,8 @@ def login():
     })
 
 @app.route('/upload', methods=['POST'])
-@token_required
-@check_role("creator")
+# @token_required
+# @check_role("creator")
 def upload_photo():
     if 'file' not in request.files:
         return jsonify({"error": "No file provided"}), 400
@@ -211,7 +211,7 @@ def upload_photo():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/photos', methods=['GET'])
-@token_required
+# @token_required
 def list_photos():
     try:
         photo_list = list(photos.find({}, {'_id': 0}))
@@ -220,7 +220,7 @@ def list_photos():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/photos/user', methods=['GET'])
-@token_required
+# @token_required
 def list_user_photos():
     try:
         user_photos = list(photos.find({"uploaded_by": g.user_id}, {'_id': 0}))
@@ -229,7 +229,7 @@ def list_user_photos():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/photos/<photo_title>', methods=['GET'])
-@token_required
+# @token_required
 def get_photo_details(photo_title):
     try:
         photo = photos.find_one({"title": photo_title}, {'_id': 0})
@@ -257,7 +257,7 @@ def get_photo_details(photo_title):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/photos/<photo_title>/comment', methods=['POST'])
-@token_required
+# @token_required
 def add_comment(photo_title):
     text = request.json.get('text')
     if not text:
@@ -278,7 +278,7 @@ def add_comment(photo_title):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/photos/<photo_title>/rate', methods=['POST'])
-@token_required
+# @token_required
 def add_rating(photo_title):
     rating = request.json.get('rating')
     if not rating or not isinstance(rating, int) or rating < 1 or rating > 5:
@@ -313,7 +313,7 @@ def add_rating(photo_title):
         return jsonify({"error": str(e)}), 500
 
 @app.route('/photos/search', methods=['GET'])
-@token_required
+# @token_required
 def search_photos():
     query = request.args.get('q', '')
     if not query:
