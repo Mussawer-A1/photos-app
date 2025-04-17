@@ -173,6 +173,12 @@ def login():
 
 @app.route('/upload', methods=['POST'])
 def upload_photo():
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return {"error": "Missing or invalid Authorization header"}, 401
+        
+    token = auth_header.split(" ")[1]
+    decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
     if 'file' not in request.files:
         return jsonify({"error": "No file provided"}), 400
     
@@ -193,9 +199,9 @@ def upload_photo():
             "caption": request.form.get('caption', ''),
             "location": request.form.get('location', ''),
             "blob_url": blob_url,
-            "uploaded_by": g.user_id,
+            "uploaded_by": decoded["username"],
             "uploaded_at": datetime.utcnow(),
-            "username": g.user['username']
+            "username": decoded["username"]
         }
         
         photos.insert_one(photo_data)
@@ -258,14 +264,20 @@ def get_photo_details(photo_title):
 @app.route('/photos/<photo_title>/comment', methods=['POST'])
 def add_comment(photo_title):
     text = request.json.get('text')
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return {"error": "Missing or invalid Authorization header"}, 401
+        
+    token = auth_header.split(" ")[1]
+    decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
     if not text:
         return jsonify({"error": "Comment text is required"}), 400
     
     try:
         comment_data = {
             "photo_title": photo_title,
-            "user_id": g.user_id,
-            "username": g.user['username'],
+            "user_id": decoded["username"],
+            "username": decoded['username'],
             "text": text,
             "timestamp": datetime.utcnow()
         }
@@ -277,6 +289,13 @@ def add_comment(photo_title):
 
 @app.route('/photos/<photo_title>/rate', methods=['POST'])
 def add_rating(photo_title):
+    text = request.json.get('text')
+    auth_header = request.headers.get('Authorization')
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return {"error": "Missing or invalid Authorization header"}, 401
+        
+    token = auth_header.split(" ")[1]
+    decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
     rating = request.json.get('rating')
     if not rating or not isinstance(rating, int) or rating < 1 or rating > 5:
         return jsonify({"error": "Rating must be an integer between 1 and 5"}), 400
@@ -285,7 +304,7 @@ def add_rating(photo_title):
         # Check if user already rated this photo
         existing_rating = ratings.find_one({
             "photo_title": photo_title,
-            "user_id": g.user_id
+            "user_id": decoded["username"]
         })
         
         if existing_rating:
@@ -297,8 +316,8 @@ def add_rating(photo_title):
         else:
             rating_data = {
                 "photo_title": photo_title,
-                "user_id": g.user_id,
-                "username": g.user['username'],
+                "user_id": decoded["username"],
+                "username": decoded['username'],
                 "rating": rating,
                 "timestamp": datetime.utcnow()
             }
