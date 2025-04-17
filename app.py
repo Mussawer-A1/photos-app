@@ -54,13 +54,15 @@ def upload_file_to_blob(file, filename):
         raise
 
 # Function to generate JWT token
-def generate_token(user_id, role):
+def generate_token(user_id, username, role):
     payload = {
         "user_id": user_id,
+        "username": username,  # 👈 Add this
         "role": role,
-        "exp": datetime.utcnow() + timedelta(hours=24)  # Token expires in 24 hours
+        "exp": datetime.utcnow() + timedelta(hours=24)
     }
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
 
 # Middleware to check for valid JWT token
 def token_required(f):
@@ -134,7 +136,8 @@ def signup():
     result = users.insert_one(new_user)
     
     # Generate JWT token for the new user
-    token = generate_token(str(result.inserted_id), "consumer")
+    token = generate_token(str(result.inserted_id), username, "consumer")
+
     return jsonify({
         "message": "User created successfully",
         "token": token,
@@ -159,7 +162,8 @@ def login():
         return jsonify({"error": "Invalid credentials"}), 401
     
     # Generate JWT token
-    token = generate_token(str(user["_id"]), user["role"])
+    token = generate_token(str(user["_id"]), user["username"], user["role"])
+
     return jsonify({
         "success": True,
         "token": token,
