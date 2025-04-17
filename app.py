@@ -179,6 +179,7 @@ def upload_photo():
         
     token = auth_header.split(" ")[1]
     decoded = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    print(token,"This is the token")
     if 'file' not in request.files:
         return jsonify({"error": "No file provided"}), 400
     
